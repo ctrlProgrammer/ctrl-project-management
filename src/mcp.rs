@@ -2,8 +2,8 @@ use crate::db::Database;
 use serde::Deserialize;
 use std::io::{self, BufRead, Write};
 
-pub fn run() -> Result<(), String> {
-    let db = Database::open("kanban.db").map_err(|e| format!("Failed to open database: {}", e))?;
+pub fn run(db_path: &str) -> Result<(), String> {
+    let db = Database::open(db_path).map_err(|e| format!("Failed to open database: {}", e))?;
 
     let stdin = io::stdin();
     let mut stdout = io::stdout();

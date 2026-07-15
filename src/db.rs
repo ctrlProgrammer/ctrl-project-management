@@ -1,5 +1,15 @@
 use rusqlite::{params, Connection};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+pub fn default_db_path() -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    let mut path = PathBuf::from(home);
+    path.push(".local/share/ctrl-project-management/kanban.db");
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    path
+}
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]

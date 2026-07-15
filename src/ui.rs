@@ -13,7 +13,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 pub fn build_ui(app: &gtk::Application) {
-    let database = crate::db::Database::open("kanban.db").expect("Failed to open database");
+    let database = crate::db::Database::open(crate::db::default_db_path()).expect("Failed to open database");
 
     let window = gtk::ApplicationWindow::new(app);
     window.set_title(Some("Project Manager"));
