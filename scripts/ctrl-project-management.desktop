@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Ctrl Project Management
+Comment=Kanban project manager with AI agent MCP integration
+Exec=ctrl-project-management
+Icon=accessories-text-editor
+Type=Application
+Categories=Office;ProjectManagement;
+Terminal=false
+StartupNotify=false

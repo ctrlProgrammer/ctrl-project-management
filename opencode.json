@@ -1,0 +1,13 @@
+{
+    "$schema": "https://opencode.ai/config.json",
+    "mcp": {
+        "kanban-mcp": {
+            "enabled": true,
+            "type": "local",
+            "command": [
+                "/home/ctrl/Projects/Personal/ctrl-project-management/target/release/ctrl-project-management",
+                "mcp"
+            ]
+        }
+    }
+}
