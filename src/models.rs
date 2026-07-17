@@ -29,5 +29,7 @@ pub struct AppState {
     pub filter_year: RefCell<i32>,
     pub filter_month: RefCell<i32>,
     pub filter_label: gtk::Label,
+    pub filter_search: RefCell<String>,
+    pub task_search: gtk::SearchEntry,
     pub window: gtk::ApplicationWindow,
 }

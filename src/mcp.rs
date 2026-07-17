@@ -29,8 +29,9 @@ pub fn run(db_path: &str) -> Result<(), String> {
             }
         };
 
-        let response = handle_request(&db, &request);
-        write_message(&mut stdout, &response);
+        if let Some(response) = handle_request(&db, &request) {
+            write_message(&mut stdout, &response);
+        }
     }
 
     Ok(())
@@ -71,8 +72,11 @@ struct JsonRpcRequest {
     params: Option<serde_json::Value>,
 }
 
-fn handle_request(db: &Database, req: &JsonRpcRequest) -> serde_json::Value {
-    match req.method.as_str() {
+fn handle_request(db: &Database, req: &JsonRpcRequest) -> Option<serde_json::Value> {
+    if req.method.starts_with("notifications/") {
+        return None;
+    }
+    Some(match req.method.as_str() {
         "initialize" => {
             make_result(req.id.clone(), serde_json::json!({
                 "protocolVersion": "2024-11-05",
@@ -207,7 +211,7 @@ fn handle_request(db: &Database, req: &JsonRpcRequest) -> serde_json::Value {
             }
         }
         _ => make_error(req.id.clone(), -32601, "Method not found", &format!("Unknown method: {}", req.method)),
-    }
+    })
 }
 
 fn handle_list_projects(db: &Database, id: Option<serde_json::Value>) -> serde_json::Value {

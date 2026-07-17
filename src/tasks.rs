@@ -18,6 +18,8 @@ pub fn refresh_tasks(state: &Rc<AppState>) {
         let db = state.db.borrow();
         let year = *state.filter_year.borrow();
         let month = *state.filter_month.borrow();
+        let search = state.filter_search.borrow().to_lowercase();
+        let search_empty = search.is_empty();
         let tasks = if year > 0 {
             db.get_tasks_for_project_and_month(project_id, year, month)
         } else {
@@ -26,6 +28,13 @@ pub fn refresh_tasks(state: &Rc<AppState>) {
         if let Ok(tasks) = tasks {
             let column_widgets = state.column_widgets.borrow();
             for task in tasks {
+                if !search_empty {
+                    let title_match = task.title.to_lowercase().contains(&search);
+                    let tags_match = task.tags.to_lowercase().contains(&search);
+                    if !title_match && !tags_match {
+                        continue;
+                    }
+                }
                 let card = create_task_card(state, &task);
                 if let Some(cw) = column_widgets.iter().find(|cw| cw.id == task.column_id) {
                     cw.list.append(&card);

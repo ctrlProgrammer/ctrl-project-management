@@ -135,6 +135,11 @@ pub fn build_ui(app: &gtk::Application) {
     let sep = gtk::Separator::new(gtk::Orientation::Horizontal);
     widget_box.append(&sep);
 
+    let task_search = gtk::SearchEntry::new();
+    task_search.set_placeholder_text(Some("Search tasks by title or tag..."));
+    task_search.add_css_class("task-search-entry");
+    widget_box.append(&task_search);
+
     let kanban_scroll = gtk::ScrolledWindow::new();
     kanban_scroll.set_hexpand(true);
     kanban_scroll.set_vexpand(true);
@@ -168,6 +173,8 @@ pub fn build_ui(app: &gtk::Application) {
         filter_year: RefCell::new(current_year),
         filter_month: RefCell::new(current_month),
         filter_label: filter_label.clone(),
+        filter_search: RefCell::new(String::new()),
+        task_search: task_search.clone(),
         window: window.clone(),
     });
 
@@ -201,6 +208,7 @@ pub fn build_ui(app: &gtk::Application) {
             *s.current_project_id.borrow_mut() = Some(project.id);
             s.project_selector.set_label(&project.name);
             s.project_search.set_text("");
+            s.task_search.set_text("");
             if let Some(popover) = s.project_selector.popover() {
                 popover.popdown();
             }
@@ -276,6 +284,13 @@ pub fn build_ui(app: &gtk::Application) {
             *month = new_month;
         }
         s.filter_label.set_text(&month_name(new_month, new_year));
+        refresh_tasks(&s);
+    });
+
+    let s = state.clone();
+    task_search.connect_changed(move |entry| {
+        let text = entry.text().to_string();
+        *s.filter_search.borrow_mut() = text;
         refresh_tasks(&s);
     });
 

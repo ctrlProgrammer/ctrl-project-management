@@ -3,3 +3,4 @@
 *.deb
 *.tar.gz
 kanban.db
+.codebase-memory/

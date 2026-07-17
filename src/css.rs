@@ -357,4 +357,20 @@ pub const APP_CSS: &str = r#"
         background-color: rgba(255, 159, 10, 0.2);
     }
 
+    .task-search-entry {
+        margin: 6px 12px 0;
+        background-color: #3A3A3C;
+        color: #EDEDED;
+        border-radius: 8px;
+        padding: 6px 12px;
+        min-height: 28px;
+        border: none;
+        outline: none;
+        box-shadow: none;
+        font-size: 13px;
+    }
+    .task-search-entry:focus {
+        background-color: #404042;
+        outline: none;
+    }
 "#;
