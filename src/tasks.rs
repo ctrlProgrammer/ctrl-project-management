@@ -3,6 +3,7 @@ use crate::dialogs::show_edit_task_dialog;
 use crate::models::AppState;
 use gtk4::gdk;
 use gtk4::gdk::prelude::*;
+use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{self as gtk};
 use std::rc::Rc;
@@ -126,6 +127,42 @@ pub fn create_task_card(state: &Rc<AppState>, task: &Task) -> gtk::Box {
             tag_box.append(&tag_label);
         }
         card.append(&tag_box);
+    }
+
+    // Priority badge
+    if task.priority > 0 {
+        let priority_labels = ["", "Low", "Medium", "High", "Critical"];
+        let name = priority_labels
+            .get(task.priority as usize)
+            .copied()
+            .unwrap_or("");
+        let plabel = gtk::Label::new(Some(name));
+        plabel.add_css_class(&format!("priority-{}", task.priority));
+        plabel.add_css_class("task-priority");
+        plabel.set_xalign(0.0);
+        card.append(&plabel);
+    }
+
+    // Due date indicator
+    if !task.due_date.is_empty() {
+        let today = glib::DateTime::now_local().unwrap();
+        let today_str = format!(
+            "{:04}-{:02}-{:02}",
+            today.year(),
+            today.month(),
+            today.day_of_month()
+        );
+        let due_box = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+        let due_label = gtk::Label::new(Some(&task.due_date));
+        due_label.set_xalign(0.0);
+        due_label.add_css_class("task-due");
+        if task.due_date < today_str {
+            due_label.add_css_class("task-due-overdue");
+        } else if task.due_date == today_str {
+            due_label.add_css_class("task-due-today");
+        }
+        due_box.append(&due_label);
+        card.append(&due_box);
     }
 
     let task_id = task.id;

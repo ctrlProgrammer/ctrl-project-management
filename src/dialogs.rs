@@ -3,6 +3,7 @@ use crate::models::AppState;
 use crate::projects::refresh_projects;
 use crate::tasks::refresh_tasks;
 use gtk4::gdk;
+use gtk4::gio;
 use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{self as gtk};
@@ -251,6 +252,19 @@ pub fn show_new_task_dialog(state: &Rc<AppState>, column_id: i64) {
     tag_entry.add_css_class("dialog-entry");
     card.append(&tag_entry);
 
+    let due_date_entry = gtk::Entry::new();
+    due_date_entry.set_placeholder_text(Some("Due date (YYYY-MM-DD)"));
+    due_date_entry.add_css_class("dialog-entry");
+    card.append(&due_date_entry);
+
+    let priority_store = gtk::StringList::new(&["Normal", "Low", "Medium", "High", "Critical"]);
+    let priority_dropdown = gtk::DropDown::new(
+        Some(priority_store.upcast::<gio::ListModel>()),
+        Option::<&gtk::Expression>::None,
+    );
+    priority_dropdown.add_css_class("dialog-entry");
+    card.append(&priority_dropdown);
+
     let completion = gtk::EntryCompletion::new();
     let tag_model = gtk::ListStore::new(&[glib::Type::STRING]);
     completion.set_model(Some(&tag_model));
@@ -319,6 +333,8 @@ pub fn show_new_task_dialog(state: &Rc<AppState>, column_id: i64) {
     let tag_entry_for_resp = tag_entry.clone();
     let docs_for_add = docs.clone();
     let desc_buffer_for_add = desc_buffer.clone();
+    let due_date_entry_for_resp = due_date_entry.clone();
+    let priority_dropdown_for_resp = priority_dropdown.clone();
     add_btn.connect_clicked(move |_| {
         let title = entry_for_resp.text().to_string().trim().to_string();
         if !title.is_empty() {
@@ -326,11 +342,13 @@ pub fn show_new_task_dialog(state: &Rc<AppState>, column_id: i64) {
             let end = desc_buffer_for_add.end_iter();
             let description = desc_buffer_for_add.text(&start, &end, false).to_string().trim().to_string();
             let link = link_entry_for_resp.text().to_string().trim().to_string();
-            let documents = docs_for_add.borrow().join("\n");
+            let documents = docs_for_add.borrow().join("\\n");
             let tags = tag_entry_for_resp.text().to_string().trim().to_string();
+            let due_date = due_date_entry_for_resp.text().to_string().trim().to_string();
+            let priority = priority_dropdown_for_resp.selected() as i32;
             if let Some(project_id) = *s.current_project_id.borrow() {
                 let db = s.db.borrow();
-                let _ = db.create_task(project_id, column_id, &title, &description, &documents, &link, &tags);
+                let _ = db.create_task(project_id, column_id, &title, &description, &documents, &link, &tags, &due_date, priority);
                 drop(db);
                 refresh_tasks(&s);
             }
@@ -412,6 +430,19 @@ pub fn show_edit_task_dialog(state: &Rc<AppState>, task_id: i64) {
     tag_entry.add_css_class("dialog-entry");
     tag_entry.set_text(&task.tags);
     card.append(&tag_entry);
+
+    let due_date_entry = gtk::Entry::new();
+    due_date_entry.set_placeholder_text(Some("Due date (YYYY-MM-DD)"));
+    due_date_entry.add_css_class("dialog-entry");
+    due_date_entry.set_text(&task.due_date);
+    card.append(&due_date_entry);
+
+    let priority_store = gtk::StringList::new(&["Normal", "Low", "Medium", "High", "Critical"]);
+    let priority_dropdown =
+        gtk::DropDown::new(Some(priority_store.upcast::<gio::ListModel>()), Option::<&gtk::Expression>::None);
+    priority_dropdown.add_css_class("dialog-entry");
+    priority_dropdown.set_selected(task.priority as u32);
+    card.append(&priority_dropdown);
 
     let completion = gtk::EntryCompletion::new();
     let tag_model = gtk::ListStore::new(&[glib::Type::STRING]);
@@ -497,6 +528,8 @@ pub fn show_edit_task_dialog(state: &Rc<AppState>, task_id: i64) {
     let tag_entry_for_resp = tag_entry.clone();
     let docs_for_save = docs.clone();
     let desc_buffer_for_save = desc_buffer.clone();
+    let due_date_entry_for_resp = due_date_entry.clone();
+    let priority_dropdown_for_resp = priority_dropdown.clone();
     save_btn.connect_clicked(move |_| {
         let title = entry_for_resp.text().to_string().trim().to_string();
         if !title.is_empty() {
@@ -506,8 +539,10 @@ pub fn show_edit_task_dialog(state: &Rc<AppState>, task_id: i64) {
             let link = link_entry_for_resp.text().to_string().trim().to_string();
             let documents = docs_for_save.borrow().join("\n");
             let tags = tag_entry_for_resp.text().to_string().trim().to_string();
+            let due_date = due_date_entry_for_resp.text().to_string().trim().to_string();
+            let priority = priority_dropdown_for_resp.selected() as i32;
             let db = s.db.borrow();
-            let _ = db.update_task(task_id, &title, &description, &documents, &link, &tags);
+            let _ = db.update_task(task_id, &title, &description, &documents, &link, &tags, &due_date, priority);
             drop(db);
             refresh_tasks(&s);
             dialog_for_save.close();

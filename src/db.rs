@@ -24,6 +24,8 @@ pub struct Task {
     pub column_id: i64,
     pub position: i32,
     pub created_at: String,
+    pub due_date: String,
+    pub priority: i32,
 }
 
 #[derive(Debug, Clone)]
@@ -157,6 +159,20 @@ impl Database {
             )?;
         }
 
+        if !self.column_exists("tasks", "due_date") {
+            self.conn.execute(
+                "ALTER TABLE tasks ADD COLUMN due_date TEXT NOT NULL DEFAULT ''",
+                [],
+            )?;
+        }
+
+        if !self.column_exists("tasks", "priority") {
+            self.conn.execute(
+                "ALTER TABLE tasks ADD COLUMN priority INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
+
         Ok(())
     }
 
@@ -258,7 +274,7 @@ impl Database {
 
     pub fn get_tasks_for_project(&self, project_id: i64) -> Result<Vec<Task>, rusqlite::Error> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, title, description, documents, link, tags, column_id, position, created_at FROM tasks WHERE project_id = ?1 ORDER BY position, created_at",
+            "SELECT id, title, description, documents, link, tags, column_id, position, created_at, due_date, priority FROM tasks WHERE project_id = ?1 ORDER BY position, created_at",
         )?;
         let rows = stmt.query_map(params![project_id], |row| {
             Ok(Task {
@@ -272,6 +288,8 @@ impl Database {
                 column_id: row.get(6)?,
                 position: row.get(7)?,
                 created_at: row.get(8)?,
+                due_date: row.get(9)?,
+                priority: row.get(10)?,
             })
         })?;
         let mut tasks = Vec::new();
@@ -289,7 +307,7 @@ impl Database {
     ) -> Result<Vec<Task>, rusqlite::Error> {
         let prefix = format!("{:04}-{:02}", year, month);
         let mut stmt = self.conn.prepare(
-            "SELECT id, title, description, documents, link, tags, column_id, position, created_at
+            "SELECT id, title, description, documents, link, tags, column_id, position, created_at, due_date, priority
              FROM tasks
              WHERE project_id = ?1 AND substr(created_at, 1, 7) = ?2
              ORDER BY position, created_at",
@@ -306,6 +324,8 @@ impl Database {
                 column_id: row.get(6)?,
                 position: row.get(7)?,
                 created_at: row.get(8)?,
+                due_date: row.get(9)?,
+                priority: row.get(10)?,
             })
         })?;
         let mut tasks = Vec::new();
@@ -324,10 +344,12 @@ impl Database {
         documents: &str,
         link: &str,
         tags: &str,
+        due_date: &str,
+        priority: i32,
     ) -> Result<i64, rusqlite::Error> {
         self.conn.execute(
-            "INSERT INTO tasks (project_id, column_id, title, description, documents, link, tags) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![project_id, column_id, title, description, documents, link, tags],
+            "INSERT INTO tasks (project_id, column_id, title, description, documents, link, tags, due_date, priority) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![project_id, column_id, title, description, documents, link, tags, due_date, priority],
         )?;
         Ok(self.conn.last_insert_rowid())
     }
@@ -370,10 +392,12 @@ impl Database {
         documents: &str,
         link: &str,
         tags: &str,
+        due_date: &str,
+        priority: i32,
     ) -> Result<(), rusqlite::Error> {
         self.conn.execute(
-            "UPDATE tasks SET title = ?1, description = ?2, documents = ?3, link = ?4, tags = ?5 WHERE id = ?6",
-            params![title, description, documents, link, tags, task_id],
+            "UPDATE tasks SET title = ?1, description = ?2, documents = ?3, link = ?4, tags = ?5, due_date = ?6, priority = ?7 WHERE id = ?8",
+            params![title, description, documents, link, tags, due_date, priority, task_id],
         )?;
         Ok(())
     }
@@ -386,7 +410,7 @@ impl Database {
 
     pub fn get_task(&self, task_id: i64) -> Result<Task, rusqlite::Error> {
         self.conn.query_row(
-            "SELECT id, project_id, title, description, documents, link, tags, column_id, position, created_at FROM tasks WHERE id = ?1",
+            "SELECT id, project_id, title, description, documents, link, tags, column_id, position, created_at, due_date, priority FROM tasks WHERE id = ?1",
             params![task_id],
             |row| Ok(Task {
                 id: row.get(0)?,
@@ -399,6 +423,8 @@ impl Database {
                 column_id: row.get(7)?,
                 position: row.get(8)?,
                 created_at: row.get(9)?,
+                due_date: row.get(10)?,
+                priority: row.get(11)?,
             }),
         )
     }

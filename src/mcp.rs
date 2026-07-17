@@ -142,7 +142,9 @@ fn handle_request(db: &Database, req: &JsonRpcRequest) -> Option<serde_json::Val
                                 "title": { "type": "string", "description": "Title of the task" },
                                 "description": { "type": "string", "description": "Description text" },
                                 "link": { "type": "string", "description": "URL link" },
-                                "tags": { "type": "string", "description": "Comma-separated tags" }
+                                "tags": { "type": "string", "description": "Comma-separated tags" },
+                                "due_date": { "type": "string", "description": "Due date in YYYY-MM-DD format" },
+                                "priority": { "type": "integer", "description": "Priority: 0=normal, 1=low, 2=medium, 3=high, 4=critical" }
                             },
                             "required": ["project_id", "column_id", "title"]
                         }
@@ -158,7 +160,9 @@ fn handle_request(db: &Database, req: &JsonRpcRequest) -> Option<serde_json::Val
                                 "description": { "type": "string", "description": "New description" },
                                 "link": { "type": "string", "description": "New link URL" },
                                 "tags": { "type": "string", "description": "New comma-separated tags" },
-                                "column_id": { "type": "integer", "description": "Move to a different column" }
+                                "column_id": { "type": "integer", "description": "Move to a different column" },
+                                "due_date": { "type": "string", "description": "Due date in YYYY-MM-DD format" },
+                                "priority": { "type": "integer", "description": "Priority: 0=normal, 1=low, 2=medium, 3=high, 4=critical" }
                             },
                             "required": ["task_id"]
                         }
@@ -271,7 +275,9 @@ fn handle_list_tasks(db: &Database, id: Option<serde_json::Value>, args: Option<
                             "link": t.link,
                             "tags": t.tags,
                             "position": t.position,
-                            "created_at": t.created_at
+                            "created_at": t.created_at,
+                            "due_date": t.due_date,
+                            "priority": t.priority
                         }))
                         .collect();
                     make_result(id, serde_json::json!({ "content": [{ "type": "text", "text": serde_json::to_string(&list).unwrap() }] }))
@@ -298,7 +304,9 @@ fn handle_get_task(db: &Database, id: Option<serde_json::Value>, args: Option<&s
                     "link": task.link,
                     "tags": task.tags,
                     "position": task.position,
-                    "created_at": task.created_at
+                    "created_at": task.created_at,
+                    "due_date": task.due_date,
+                    "priority": task.priority
                 });
                 make_result(id, serde_json::json!({ "content": [{ "type": "text", "text": serde_json::to_string(&obj).unwrap() }] }))
             }
@@ -327,8 +335,10 @@ fn handle_create_task(db: &Database, id: Option<serde_json::Value>, args: Option
     let description = args.get("description").and_then(|v| v.as_str()).unwrap_or("");
     let link = args.get("link").and_then(|v| v.as_str()).unwrap_or("");
     let tags = args.get("tags").and_then(|v| v.as_str()).unwrap_or("");
+    let due_date = args.get("due_date").and_then(|v| v.as_str()).unwrap_or("");
+    let priority = args.get("priority").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
 
-    match db.create_task(project_id, column_id, title, description, "", link, tags) {
+    match db.create_task(project_id, column_id, title, description, "", link, tags, due_date, priority) {
         Ok(task_id) => match db.get_task(task_id) {
             Ok(task) => {
                 let obj = serde_json::json!({
@@ -359,8 +369,10 @@ fn handle_update_task(db: &Database, id: Option<serde_json::Value>, args: Option
     let description = args.get("description").and_then(|v| v.as_str()).unwrap_or(&existing.description);
     let link = args.get("link").and_then(|v| v.as_str()).unwrap_or(&existing.link);
     let tags = args.get("tags").and_then(|v| v.as_str()).unwrap_or(&existing.tags);
+    let due_date = args.get("due_date").and_then(|v| v.as_str()).unwrap_or(&existing.due_date);
+    let priority = args.get("priority").and_then(|v| v.as_i64()).unwrap_or(existing.priority as i64) as i32;
 
-    match db.update_task(task_id, title, description, &existing.documents, link, tags) {
+    match db.update_task(task_id, title, description, &existing.documents, link, tags, due_date, priority) {
         Ok(()) => {
             if let Some(col_id) = args.get("column_id").and_then(|v| v.as_i64()) {
                 let _ = db.update_task_column(task_id, col_id);
@@ -370,7 +382,7 @@ fn handle_update_task(db: &Database, id: Option<serde_json::Value>, args: Option
                     let obj = serde_json::json!({
                         "id": task.id, "column_id": task.column_id, "title": task.title,
                         "description": task.description, "link": task.link, "tags": task.tags,
-                        "created_at": task.created_at
+                        "created_at": task.created_at, "due_date": task.due_date, "priority": task.priority
                     });
                     make_result(id, serde_json::json!({ "content": [{ "type": "text", "text": serde_json::to_string(&obj).unwrap() }] }))
                 }

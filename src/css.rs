@@ -221,6 +221,22 @@ pub const APP_CSS: &str = r#"
     .task-tag:nth-child(3n+1) { background-color: #FF9F0A; }
     .task-tag:nth-child(3n+2) { background-color: #32ADE6; }
     .task-tag:nth-child(3n+3) { background-color: #AF52DE; }
+    .task-priority {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 4px;
+    }
+    .priority-1 { color: #1C1C1E; background-color: #34C759; }
+    .priority-2 { color: #1C1C1E; background-color: #32ADE6; }
+    .priority-3 { color: #1C1C1E; background-color: #FF9F0A; }
+    .priority-4 { color: #EDEDED; background-color: #FF453A; }
+    .task-due {
+        font-size: 11px;
+        font-weight: 500;
+    }
+    .task-due-overdue { color: #FF453A; }
+    .task-due-today { color: #FF9F0A; }
     .dialog-docs-label {
         font-size: 11px;
         font-weight: 400;
