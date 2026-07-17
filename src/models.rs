@@ -31,5 +31,6 @@ pub struct AppState {
     pub filter_label: gtk::Label,
     pub filter_search: RefCell<String>,
     pub task_search: gtk::SearchEntry,
+    pub filter_priority: RefCell<i32>,
     pub window: gtk::ApplicationWindow,
 }

@@ -3,7 +3,6 @@ use crate::models::AppState;
 use crate::projects::refresh_projects;
 use crate::tasks::refresh_tasks;
 use gtk4::gdk;
-use gtk4::gio;
 use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{self as gtk};
@@ -252,18 +251,86 @@ pub fn show_new_task_dialog(state: &Rc<AppState>, column_id: i64) {
     tag_entry.add_css_class("dialog-entry");
     card.append(&tag_entry);
 
+    // Due date row with calendar picker
+    let due_date_row = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+    due_date_row.add_css_class("due-date-row");
     let due_date_entry = gtk::Entry::new();
-    due_date_entry.set_placeholder_text(Some("Due date (YYYY-MM-DD)"));
+    due_date_entry.set_placeholder_text(Some("YYYY-MM-DD"));
     due_date_entry.add_css_class("dialog-entry");
-    card.append(&due_date_entry);
+    due_date_entry.set_hexpand(true);
+    due_date_row.append(&due_date_entry);
 
-    let priority_store = gtk::StringList::new(&["Normal", "Low", "Medium", "High", "Critical"]);
-    let priority_dropdown = gtk::DropDown::new(
-        Some(priority_store.upcast::<gio::ListModel>()),
-        Option::<&gtk::Expression>::None,
-    );
-    priority_dropdown.add_css_class("dialog-entry");
-    card.append(&priority_dropdown);
+    let calendar_btn = gtk::MenuButton::new();
+    calendar_btn.set_label("📅");
+    calendar_btn.add_css_class("calendar-btn");
+    calendar_btn.set_has_frame(false);
+    let cal_popover = gtk::Popover::new();
+    cal_popover.set_has_arrow(false);
+    cal_popover.add_css_class("calendar-popover");
+    let calendar = gtk::Calendar::new();
+    let due_entry_c = due_date_entry.clone();
+    calendar.connect_day_selected(move |cal| {
+        let dt = cal.date();
+        due_entry_c.set_text(&format!("{:04}-{:02}-{:02}", dt.year(), dt.month(), dt.day_of_month()));
+    });
+    cal_popover.set_child(Some(&calendar));
+    calendar_btn.set_popover(Some(&cal_popover));
+    due_date_row.append(&calendar_btn);
+    card.append(&due_date_row);
+
+    // Priority selector — color-coded popover like the date picker
+    let priority_selected: Rc<RefCell<i32>> = Rc::new(RefCell::new(0));
+    let priority_btn = gtk::MenuButton::new();
+    priority_btn.add_css_class("priority-selector");
+    priority_btn.add_css_class("pri-bg-0");
+    priority_btn.set_has_frame(false);
+    priority_btn.set_halign(gtk::Align::Fill);
+    priority_btn.set_label("Normal");
+    let priority_popover = gtk::Popover::new();
+    priority_popover.set_has_arrow(false);
+    priority_popover.add_css_class("priority-popover");
+    let popover_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    let pri_list = ["Normal", "Low", "Medium", "High", "Critical"];
+    for (val, name) in pri_list.iter().enumerate() {
+        let n = name.to_string();
+        let opt = gtk::Button::new();
+        opt.add_css_class("priority-option");
+        opt.set_has_frame(false);
+        opt.set_halign(gtk::Align::Fill);
+        let row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        row.set_valign(gtk::Align::Center);
+        let circle = gtk::Label::new(Some("●"));
+        circle.add_css_class("pri-dot");
+        circle.add_css_class(&format!("pri-dot-{}", val));
+        let lbl = gtk::Label::new(Some(&n));
+        lbl.add_css_class("pri-opt-name");
+        lbl.set_xalign(0.0);
+        lbl.set_hexpand(true);
+        row.append(&circle);
+        row.append(&lbl);
+        if val == 0 {
+            let check = gtk::Label::new(Some("✓"));
+            check.add_css_class("pri-check");
+            row.append(&check);
+        }
+        opt.set_child(Some(&row));
+        let p_btn = priority_btn.clone();
+        let p_sel = priority_selected.clone();
+        let p_pop = priority_popover.clone();
+        opt.connect_clicked(move |_| {
+            *p_sel.borrow_mut() = val as i32;
+            p_btn.set_label(&n);
+            for c in 0..=4 {
+                p_btn.remove_css_class(&format!("pri-bg-{}", c));
+            }
+            p_btn.add_css_class(&format!("pri-bg-{}", val));
+            p_pop.popdown();
+        });
+        popover_box.append(&opt);
+    }
+    priority_popover.set_child(Some(&popover_box));
+    priority_btn.set_popover(Some(&priority_popover));
+    card.append(&priority_btn);
 
     let completion = gtk::EntryCompletion::new();
     let tag_model = gtk::ListStore::new(&[glib::Type::STRING]);
@@ -334,7 +401,7 @@ pub fn show_new_task_dialog(state: &Rc<AppState>, column_id: i64) {
     let docs_for_add = docs.clone();
     let desc_buffer_for_add = desc_buffer.clone();
     let due_date_entry_for_resp = due_date_entry.clone();
-    let priority_dropdown_for_resp = priority_dropdown.clone();
+    let priority_selected_for_resp = priority_selected.clone();
     add_btn.connect_clicked(move |_| {
         let title = entry_for_resp.text().to_string().trim().to_string();
         if !title.is_empty() {
@@ -345,7 +412,7 @@ pub fn show_new_task_dialog(state: &Rc<AppState>, column_id: i64) {
             let documents = docs_for_add.borrow().join("\\n");
             let tags = tag_entry_for_resp.text().to_string().trim().to_string();
             let due_date = due_date_entry_for_resp.text().to_string().trim().to_string();
-            let priority = priority_dropdown_for_resp.selected() as i32;
+            let priority = *priority_selected_for_resp.borrow();
             if let Some(project_id) = *s.current_project_id.borrow() {
                 let db = s.db.borrow();
                 let _ = db.create_task(project_id, column_id, &title, &description, &documents, &link, &tags, &due_date, priority);
@@ -431,18 +498,89 @@ pub fn show_edit_task_dialog(state: &Rc<AppState>, task_id: i64) {
     tag_entry.set_text(&task.tags);
     card.append(&tag_entry);
 
+    // Due date row with calendar picker
+    let due_date_row = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+    due_date_row.add_css_class("due-date-row");
     let due_date_entry = gtk::Entry::new();
-    due_date_entry.set_placeholder_text(Some("Due date (YYYY-MM-DD)"));
+    due_date_entry.set_placeholder_text(Some("YYYY-MM-DD"));
     due_date_entry.add_css_class("dialog-entry");
+    due_date_entry.set_hexpand(true);
     due_date_entry.set_text(&task.due_date);
-    card.append(&due_date_entry);
+    due_date_row.append(&due_date_entry);
 
-    let priority_store = gtk::StringList::new(&["Normal", "Low", "Medium", "High", "Critical"]);
-    let priority_dropdown =
-        gtk::DropDown::new(Some(priority_store.upcast::<gio::ListModel>()), Option::<&gtk::Expression>::None);
-    priority_dropdown.add_css_class("dialog-entry");
-    priority_dropdown.set_selected(task.priority as u32);
-    card.append(&priority_dropdown);
+    let calendar_btn = gtk::MenuButton::new();
+    calendar_btn.set_label("📅");
+    calendar_btn.add_css_class("calendar-btn");
+    calendar_btn.set_has_frame(false);
+    let cal_popover = gtk::Popover::new();
+    cal_popover.set_has_arrow(false);
+    cal_popover.add_css_class("calendar-popover");
+    let calendar = gtk::Calendar::new();
+    let due_entry_c = due_date_entry.clone();
+    calendar.connect_day_selected(move |cal| {
+        let dt = cal.date();
+        due_entry_c.set_text(&format!("{:04}-{:02}-{:02}", dt.year(), dt.month(), dt.day_of_month()));
+    });
+    cal_popover.set_child(Some(&calendar));
+    calendar_btn.set_popover(Some(&cal_popover));
+    due_date_row.append(&calendar_btn);
+    card.append(&due_date_row);
+
+    // Priority selector — color-coded popover like the date picker
+    let priority_selected: Rc<RefCell<i32>> = Rc::new(RefCell::new(task.priority));
+    let priority_btn = gtk::MenuButton::new();
+    priority_btn.add_css_class("priority-selector");
+    let initial_idx = task.priority.min(4).max(0) as usize;
+    priority_btn.add_css_class(&format!("pri-bg-{}", initial_idx));
+    priority_btn.set_has_frame(false);
+    priority_btn.set_halign(gtk::Align::Fill);
+    let pri_names = ["Normal", "Low", "Medium", "High", "Critical"];
+    priority_btn.set_label(pri_names[initial_idx]);
+    let priority_popover = gtk::Popover::new();
+    priority_popover.set_has_arrow(false);
+    priority_popover.add_css_class("priority-popover");
+    let popover_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    let pri_list = ["Normal", "Low", "Medium", "High", "Critical"];
+    for (val, name) in pri_list.iter().enumerate() {
+        let n = name.to_string();
+        let opt = gtk::Button::new();
+        opt.add_css_class("priority-option");
+        opt.set_has_frame(false);
+        opt.set_halign(gtk::Align::Fill);
+        let row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        row.set_valign(gtk::Align::Center);
+        let circle = gtk::Label::new(Some("●"));
+        circle.add_css_class("pri-dot");
+        circle.add_css_class(&format!("pri-dot-{}", val));
+        let lbl = gtk::Label::new(Some(&n));
+        lbl.add_css_class("pri-opt-name");
+        lbl.set_xalign(0.0);
+        lbl.set_hexpand(true);
+        row.append(&circle);
+        row.append(&lbl);
+        if val == initial_idx {
+            let check = gtk::Label::new(Some("✓"));
+            check.add_css_class("pri-check");
+            row.append(&check);
+        }
+        opt.set_child(Some(&row));
+        let p_btn = priority_btn.clone();
+        let p_sel = priority_selected.clone();
+        let p_pop = priority_popover.clone();
+        opt.connect_clicked(move |_| {
+            *p_sel.borrow_mut() = val as i32;
+            p_btn.set_label(&n);
+            for c in 0..=4 {
+                p_btn.remove_css_class(&format!("pri-bg-{}", c));
+            }
+            p_btn.add_css_class(&format!("pri-bg-{}", val));
+            p_pop.popdown();
+        });
+        popover_box.append(&opt);
+    }
+    priority_popover.set_child(Some(&popover_box));
+    priority_btn.set_popover(Some(&priority_popover));
+    card.append(&priority_btn);
 
     let completion = gtk::EntryCompletion::new();
     let tag_model = gtk::ListStore::new(&[glib::Type::STRING]);
@@ -529,7 +667,7 @@ pub fn show_edit_task_dialog(state: &Rc<AppState>, task_id: i64) {
     let docs_for_save = docs.clone();
     let desc_buffer_for_save = desc_buffer.clone();
     let due_date_entry_for_resp = due_date_entry.clone();
-    let priority_dropdown_for_resp = priority_dropdown.clone();
+    let priority_selected_for_resp = priority_selected.clone();
     save_btn.connect_clicked(move |_| {
         let title = entry_for_resp.text().to_string().trim().to_string();
         if !title.is_empty() {
@@ -540,7 +678,7 @@ pub fn show_edit_task_dialog(state: &Rc<AppState>, task_id: i64) {
             let documents = docs_for_save.borrow().join("\n");
             let tags = tag_entry_for_resp.text().to_string().trim().to_string();
             let due_date = due_date_entry_for_resp.text().to_string().trim().to_string();
-            let priority = priority_dropdown_for_resp.selected() as i32;
+            let priority = *priority_selected_for_resp.borrow();
             let db = s.db.borrow();
             let _ = db.update_task(task_id, &title, &description, &documents, &link, &tags, &due_date, priority);
             drop(db);

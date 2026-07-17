@@ -21,6 +21,7 @@ pub fn refresh_tasks(state: &Rc<AppState>) {
         let month = *state.filter_month.borrow();
         let search = state.filter_search.borrow().to_lowercase();
         let search_empty = search.is_empty();
+        let priority_filter = *state.filter_priority.borrow();
         let tasks = if year > 0 {
             db.get_tasks_for_project_and_month(project_id, year, month)
         } else {
@@ -35,6 +36,9 @@ pub fn refresh_tasks(state: &Rc<AppState>) {
                     if !title_match && !tags_match {
                         continue;
                     }
+                }
+                if priority_filter >= 0 && task.priority != priority_filter {
+                    continue;
                 }
                 let card = create_task_card(state, &task);
                 if let Some(cw) = column_widgets.iter().find(|cw| cw.id == task.column_id) {

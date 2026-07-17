@@ -26,31 +26,32 @@ pub const APP_CSS: &str = r#"
     .project-selector {
         background-color: #3A3A3C;
         color: #EDEDED;
-        border-radius: 8px;
-        min-height: 28px;
+        border-radius: 10px;
+        min-height: 36px;
         min-width: 160px;
-        padding: 0 12px;
+        padding: 0;
         border: none;
         outline: none;
         box-shadow: none;
-        text-shadow: none;
         font-size: 13px;
         font-weight: 500;
     }
     .project-selector:hover {
         background-color: #48484A;
-        box-shadow: none;
     }
-    .project-popover {
-        background-color: #252529;
-        border-radius: 14px;
-        padding: 6px;
-        box-shadow: none;
-    }
-    .project-selector button {
-        box-shadow: none;
+    .project-selector:focus {
+        background-color: #404042;
         outline: none;
+    }
+    .project-selector label {
+        margin-left: 8px;
+    }
+
+    .project-popover {
+        background-color: #1C1C22;
         border: none;
+        border-radius: 14px;
+        padding: 4px;
     }
 
     .project-search {
@@ -76,27 +77,75 @@ pub const APP_CSS: &str = r#"
     }
     .project-list row {
         background-color: transparent;
-        border-radius: 6px;
-        padding: 0 4px;
-        min-height: 32px;
+        border-radius: 8px;
+        padding: 0 8px;
+        min-height: 36px;
         border: none;
-        outline: none;
+        font-size: 13px;
     }
     .project-list row:hover {
         background-color: rgba(255, 255, 255, 0.06);
     }
     .project-list row:focus,
     .project-list row:selected {
-        background-color: #FF9F0A;
-        color: #1C1C1E;
-        border-radius: 6px;
+        background-color: rgba(255, 159, 10, 0.12);
+        color: #EDEDED;
+        border-radius: 8px;
         outline: none;
     }
     .project-list label {
         padding: 4px 8px;
         font-size: 13px;
-        font-weight: 500;
+        font-weight: 400;
     }
+
+    /* Search — minimalist */
+    .task-search-entry {
+        margin: 0;
+        background-color: #3A3A3C;
+        color: #EDEDED;
+        border-radius: 10px;
+        padding: 0 10px;
+        min-height: 28px;
+        border: none;
+        outline: none;
+        font-size: 13px;
+        font-weight: 400;
+    }
+    .task-search-entry:focus {
+        background-color: #404042;
+        outline: none;
+    }
+
+    /* Filter row — search + priority filter */
+    .filter-row {
+        margin: 6px 12px 0;
+    }
+    .priority-filter-btn {
+        background-color: #3A3A3C;
+        color: #8E8E93;
+        border-radius: 10px;
+        min-height: 28px;
+        padding: 0;
+        border: none;
+        outline: none;
+        font-size: 12px;
+        font-weight: 500;
+        min-width: 110px;
+    }
+    .priority-filter-btn:hover {
+        background-color: #48484A;
+        color: #EDEDED;
+    }
+    .priority-filter-btn label {
+        margin: 0 10px;
+    }
+    .priority-filter-btn:focus {
+        background-color: #404042;
+        outline: none;
+    }
+
+    /* Project search popover */
     .kanban-column {
         background-color: #252529;
         border: 0.5px solid #3A3A3C;
@@ -144,6 +193,8 @@ pub const APP_CSS: &str = r#"
     .delete-project-btn {
         padding: 0 10px;
     }
+
+    /* Task cards */
     .task-card {
         background-color: rgba(37, 37, 41, 0.9);
         border-radius: 12px;
@@ -221,6 +272,8 @@ pub const APP_CSS: &str = r#"
     .task-tag:nth-child(3n+1) { background-color: #FF9F0A; }
     .task-tag:nth-child(3n+2) { background-color: #32ADE6; }
     .task-tag:nth-child(3n+3) { background-color: #AF52DE; }
+
+    /* Priority badges on cards */
     .task-priority {
         font-size: 10px;
         font-weight: 700;
@@ -231,12 +284,126 @@ pub const APP_CSS: &str = r#"
     .priority-2 { color: #1C1C1E; background-color: #32ADE6; }
     .priority-3 { color: #1C1C1E; background-color: #FF9F0A; }
     .priority-4 { color: #EDEDED; background-color: #FF453A; }
+
+    /* Due date on cards */
     .task-due {
         font-size: 11px;
         font-weight: 500;
     }
     .task-due-overdue { color: #FF453A; }
     .task-due-today { color: #FF9F0A; }
+
+    /* Priority selector — minimalist popover with color dots */
+    .priority-selector {
+        background-color: #3A3A3C;
+        color: #EDEDED;
+        border-radius: 10px;
+        min-height: 36px;
+        padding: 0;
+        border: none;
+        outline: none;
+        box-shadow: none;
+        font-size: 13px;
+        font-weight: 500;
+        text-align: left;
+    }
+    .priority-selector:hover {
+        background-color: #48484A;
+    }
+    .priority-selector:focus {
+        background-color: #404042;
+        outline: none;
+    }
+    /* Color indicator via left-side gradient — flush with edge */
+    .pri-bg-0 { background-image: linear-gradient(to right, #8E8E93 3px, #3A3A3C 3px); }
+    .pri-bg-1 { background-image: linear-gradient(to right, #34C759 3px, #3A3A3C 3px); }
+    .pri-bg-2 { background-image: linear-gradient(to right, #32ADE6 3px, #3A3A3C 3px); }
+    .pri-bg-3 { background-image: linear-gradient(to right, #FF9F0A 3px, #3A3A3C 3px); }
+    .pri-bg-4 { background-image: linear-gradient(to right, #FF453A 3px, #3A3A3C 3px); }
+    .pri-bg-0:hover { background-image: linear-gradient(to right, #8E8E93 3px, #48484A 3px); }
+    .pri-bg-1:hover { background-image: linear-gradient(to right, #34C759 3px, #48484A 3px); }
+    .pri-bg-2:hover { background-image: linear-gradient(to right, #32ADE6 3px, #48484A 3px); }
+    .pri-bg-3:hover { background-image: linear-gradient(to right, #FF9F0A 3px, #48484A 3px); }
+    .pri-bg-4:hover { background-image: linear-gradient(to right, #FF453A 3px, #48484A 3px); }
+    /* Internal label gets a left margin so text doesn't hug the color bar */
+    .priority-selector label {
+        margin-left: 8px;
+    }
+
+    .priority-popover {
+        background-color: #1C1C22;
+        border: none;
+        border-radius: 14px;
+        padding: 4px;
+    }
+    .priority-option {
+        background-color: transparent;
+        color: #EDEDED;
+        border-radius: 8px;
+        padding: 0 8px;
+        min-height: 36px;
+        border: none;
+        font-size: 13px;
+    }
+    .priority-option:hover {
+        background-color: rgba(255, 255, 255, 0.06);
+    }
+    /* Colored text dot for reliability across platforms */
+    .pri-dot {
+        font-size: 14px;
+        min-width: 18px;
+        text-align: center;
+    }
+    .pri-dot-0 { color: #8E8E93; }
+    .pri-dot-1 { color: #34C759; }
+    .pri-dot-2 { color: #32ADE6; }
+    .pri-dot-3 { color: #FF9F0A; }
+    .pri-dot-4 { color: #FF453A; }
+    .pri-check {
+        color: #FF9F0A;
+        font-weight: 700;
+        font-size: 14px;
+        min-width: 20px;
+    }
+    .pri-opt-name {
+        font-size: 13px;
+        font-weight: 400;
+    }
+
+    /* Calendar picker */
+    .calendar-btn {
+        background-color: #3A3A3C;
+        color: #8E8E93;
+        border-radius: 8px;
+        min-width: 32px;
+        min-height: 32px;
+        padding: 0;
+        border: none;
+        font-size: 16px;
+    }
+    .calendar-btn:hover {
+        background-color: #48484A;
+        color: #EDEDED;
+    }
+    .calendar-popover {
+        background-color: #1C1C22;
+        border: 0.5px solid #3A3A3C;
+        border-radius: 14px;
+        padding: 8px;
+        box-shadow: none;
+    }
+    .calendar-popover calendar {
+        background-color: #252529;
+        color: #EDEDED;
+        border: none;
+        border-radius: 8px;
+    }
+    .calendar-popover calendar:selected {
+        background-color: #FF9F0A;
+        color: #1C1C1E;
+    }
+
+    /* Dialogs */
     .dialog-docs-label {
         font-size: 11px;
         font-weight: 400;
@@ -371,22 +538,5 @@ pub const APP_CSS: &str = r#"
     .current-month-btn:hover {
         color: #EDEDED;
         background-color: rgba(255, 159, 10, 0.2);
-    }
-
-    .task-search-entry {
-        margin: 6px 12px 0;
-        background-color: #3A3A3C;
-        color: #EDEDED;
-        border-radius: 8px;
-        padding: 6px 12px;
-        min-height: 28px;
-        border: none;
-        outline: none;
-        box-shadow: none;
-        font-size: 13px;
-    }
-    .task-search-entry:focus {
-        background-color: #404042;
-        outline: none;
     }
 "#;

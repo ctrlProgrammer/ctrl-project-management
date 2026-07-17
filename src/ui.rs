@@ -18,7 +18,7 @@ pub fn build_ui(app: &gtk::Application) {
     let window = gtk::ApplicationWindow::new(app);
     window.set_title(Some("Project Manager"));
     window.set_decorated(false);
-    window.set_default_size(1060, 640);
+    window.set_default_size(1219, 736);
 
     let display = gtk4::gdk::Display::default().expect("No display");
     let provider = gtk::CssProvider::new();
@@ -135,10 +135,40 @@ pub fn build_ui(app: &gtk::Application) {
     let sep = gtk::Separator::new(gtk::Orientation::Horizontal);
     widget_box.append(&sep);
 
+    // Filter row: search + priority filter
+    let filter_row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    filter_row.add_css_class("filter-row");
+
     let task_search = gtk::SearchEntry::new();
-    task_search.set_placeholder_text(Some("Search tasks by title or tag..."));
+    task_search.set_placeholder_text(Some("Search tasks..."));
     task_search.add_css_class("task-search-entry");
-    widget_box.append(&task_search);
+    task_search.set_hexpand(true);
+    filter_row.append(&task_search);
+
+    let priority_filter_btn = gtk::MenuButton::new();
+    priority_filter_btn.add_css_class("priority-filter-btn");
+    priority_filter_btn.set_has_frame(false);
+    priority_filter_btn.set_label("All");
+    let pf_popover = gtk::Popover::new();
+    pf_popover.set_has_arrow(false);
+    pf_popover.add_css_class("priority-popover");
+    let pf_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    let pf_items = [(-1, "All"), (0, "Normal"), (1, "Low"), (2, "Medium"), (3, "High"), (4, "Critical")];
+    for &(_val, name) in &pf_items {
+        let opt = gtk::Button::new();
+        opt.add_css_class("priority-option");
+        opt.set_has_frame(false);
+        opt.set_halign(gtk::Align::Fill);
+        let lbl = gtk::Label::new(Some(name));
+        lbl.set_xalign(0.0);
+        lbl.set_hexpand(true);
+        opt.set_child(Some(&lbl));
+        pf_box.append(&opt);
+    }
+    pf_popover.set_child(Some(&pf_box));
+    priority_filter_btn.set_popover(Some(&pf_popover));
+    filter_row.append(&priority_filter_btn);
+    widget_box.append(&filter_row);
 
     let kanban_scroll = gtk::ScrolledWindow::new();
     kanban_scroll.set_hexpand(true);
@@ -175,8 +205,32 @@ pub fn build_ui(app: &gtk::Application) {
         filter_label: filter_label.clone(),
         filter_search: RefCell::new(String::new()),
         task_search: task_search.clone(),
+        filter_priority: RefCell::new(-1),
         window: window.clone(),
     });
+
+    // Wire priority filter options
+    let pf_vals = [-1, 0, 1, 2, 3, 4];
+    let pf_names = ["All", "Normal", "Low", "Medium", "High", "Critical"];
+    let mut pf_child = pf_box.first_child();
+    let mut pf_idx = 0usize;
+    while let Some(widget) = pf_child {
+        if let Some(opt) = widget.downcast_ref::<gtk::Button>() {
+            let pfb = priority_filter_btn.clone();
+            let pf_pop = pf_popover.clone();
+            let s = state.clone();
+            let val = pf_vals[pf_idx];
+            let name = pf_names[pf_idx];
+            pf_idx += 1;
+            opt.connect_clicked(move |_| {
+                *s.filter_priority.borrow_mut() = val;
+                pfb.set_label(name);
+                pf_pop.popdown();
+                refresh_tasks(&s);
+            });
+        }
+        pf_child = widget.next_sibling();
+    }
 
     let s = state.clone();
     project_search.connect_changed(move |entry| {
@@ -201,6 +255,7 @@ pub fn build_ui(app: &gtk::Application) {
     });
 
     let s = state.clone();
+    let pfb_for_switch = priority_filter_btn.clone();
     project_listbox.connect_row_activated(move |_listbox, row| {
         let index = row.index();
         let projects = s.projects.borrow();
@@ -209,6 +264,8 @@ pub fn build_ui(app: &gtk::Application) {
             s.project_selector.set_label(&project.name);
             s.project_search.set_text("");
             s.task_search.set_text("");
+            *s.filter_priority.borrow_mut() = -1;
+            pfb_for_switch.set_label("All");
             if let Some(popover) = s.project_selector.popover() {
                 popover.popdown();
             }
