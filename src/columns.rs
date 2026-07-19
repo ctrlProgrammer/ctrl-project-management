@@ -24,8 +24,6 @@ pub fn rebuild_columns(state: &Rc<AppState>) {
             }
         }
     }
-
-    state.kanban_box.append(&state.add_column_btn);
 }
 
 pub fn create_column_widgets(

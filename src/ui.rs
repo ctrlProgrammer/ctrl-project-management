@@ -102,6 +102,10 @@ pub fn build_ui(app: &gtk::Application) {
     export_btn.set_has_frame(false);
     export_btn.add_css_class("export-btn");
 
+    let add_column_btn = gtk::Button::with_label("+ Add Column");
+    add_column_btn.set_has_frame(false);
+    add_column_btn.add_css_class("add-column-btn");
+
     let delete_project_btn = gtk::Button::with_label("Delete Project");
     delete_project_btn.add_css_class("column-delete");
     delete_project_btn.add_css_class("delete-project-btn");
@@ -145,6 +149,7 @@ pub fn build_ui(app: &gtk::Application) {
     header.append(&delete_project_btn);
     header.append(&export_btn);
     header.append(&new_project_btn);
+    header.append(&add_column_btn);
 
     widget_box.append(&header);
 
@@ -203,8 +208,6 @@ pub fn build_ui(app: &gtk::Application) {
     kanban_box.set_vexpand(true);
     kanban_scroll.set_child(Some(&kanban_box));
     widget_box.append(&kanban_scroll);
-
-    let add_column_btn = gtk::Button::with_label("+ Add Column");
 
     let now = glib::DateTime::now_local().unwrap();
     let current_year = now.year();

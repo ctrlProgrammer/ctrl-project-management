@@ -438,20 +438,19 @@ pub const APP_CSS: &str = r#"
     .add-column-button:hover, .add-task-button:hover {
         background-color: rgba(37, 37, 41, 0.6);
     }
-    .add-column-outer {
+    .add-column-btn {
+        background: none;
         color: #FF9F0A;
-        font-size: 13px;
-        font-weight: 500;
-        padding: 12px 16px;
-        border-radius: 16px;
-        margin: 6px;
-        border: 0.5px dashed #3A3A3C;
-        min-width: 180px;
-        background-color: transparent;
+        font-size: 12px;
+        font-weight: 600;
+        min-height: 22px;
+        padding: 0 8px;
+        border: none;
+        border-radius: 6px;
     }
-    .add-column-outer:hover {
-        background-color: rgba(37, 37, 41, 0.6);
-        border-color: #FF9F0A;
+    .add-column-btn:hover {
+        color: #EDEDED;
+        background-color: rgba(255, 159, 10, 0.2);
     }
 
     .dialog-window {

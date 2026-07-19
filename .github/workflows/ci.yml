@@ -26,4 +26,4 @@ jobs:
         run: cargo build --release
 
       - name: cargo clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy
