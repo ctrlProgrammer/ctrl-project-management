@@ -161,6 +161,7 @@ fn handle_request(db: &Database, req: &JsonRpcRequest) -> Option<serde_json::Val
                                 "link": { "type": "string", "description": "New link URL" },
                                 "tags": { "type": "string", "description": "New comma-separated tags" },
                                 "column_id": { "type": "integer", "description": "Move to a different column" },
+                                "position": { "type": "integer", "description": "New position within the column" },
                                 "due_date": { "type": "string", "description": "Due date in YYYY-MM-DD format" },
                                 "priority": { "type": "integer", "description": "Priority: 0=normal, 1=low, 2=medium, 3=high, 4=critical" }
                             },
@@ -374,8 +375,19 @@ fn handle_update_task(db: &Database, id: Option<serde_json::Value>, args: Option
 
     match db.update_task(task_id, title, description, &existing.documents, link, tags, due_date, priority) {
         Ok(()) => {
-            if let Some(col_id) = args.get("column_id").and_then(|v| v.as_i64()) {
-                let _ = db.update_task_column(task_id, col_id);
+            let col_id_arg = args.get("column_id").and_then(|v| v.as_i64());
+            let pos_arg = args.get("position").and_then(|v| v.as_i64());
+            match (col_id_arg, pos_arg) {
+                (Some(col_id), Some(pos)) => {
+                    let _ = db.move_task(task_id, col_id, pos as i32);
+                }
+                (Some(col_id), None) => {
+                    let _ = db.update_task_column(task_id, col_id);
+                }
+                (None, Some(pos)) => {
+                    let _ = db.move_task(task_id, existing.column_id, pos as i32);
+                }
+                (None, None) => {}
             }
             match db.get_task(task_id) {
                 Ok(task) => {

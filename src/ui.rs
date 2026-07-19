@@ -123,9 +123,15 @@ pub fn build_ui(app: &gtk::Application) {
     filter_box.append(&next_month_btn);
     filter_box.append(&current_btn);
 
+    let sync_btn = gtk::Button::with_label("\u{21bb}");
+    sync_btn.add_css_class("sync-btn");
+    sync_btn.set_has_frame(false);
+    sync_btn.set_tooltip_text(Some("Refresh tasks"));
+
     let header_fill = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     header_fill.set_hexpand(true);
     header.append(&header_fill);
+    header.append(&sync_btn);
     header.append(&filter_box);
     header.append(&delete_project_btn);
     header.append(&new_project_btn);
@@ -343,6 +349,48 @@ pub fn build_ui(app: &gtk::Application) {
         s.filter_label.set_text(&month_name(new_month, new_year));
         refresh_tasks(&s);
     });
+
+    let s = state.clone();
+    sync_btn.connect_clicked(move |_| {
+        refresh_tasks(&s);
+    });
+
+    // Drop target on kanban_box for column reordering
+    let col_drop = gtk::DropTarget::new(glib::Type::STRING, gdk::DragAction::MOVE);
+    let s = state.clone();
+    col_drop.connect_drop(move |_target, value, x, _y| {
+        let s = s.clone();
+        if let Ok(val_str) = value.get::<String>() {
+            if let Some(col_str) = val_str.strip_prefix("col:") {
+                if let Ok(col_id) = col_str.parse::<i64>() {
+                    let pos = {
+                        let mut pos = 0i32;
+                        let mut child = s.kanban_box.first_child();
+                        while let Some(widget) = child {
+                            if widget == s.add_column_btn {
+                                child = widget.next_sibling();
+                                continue;
+                            }
+                            let alloc = widget.allocation();
+                            if x < alloc.x() as f64 + alloc.width() as f64 / 2.0 {
+                                break;
+                            }
+                            pos += 1;
+                            child = widget.next_sibling();
+                        }
+                        pos
+                    };
+                    let db = s.db.borrow();
+                    let _ = db.reorder_column(col_id, pos);
+                    drop(db);
+                    rebuild_columns(&s);
+                    refresh_tasks(&s);
+                }
+            }
+        }
+        true
+    });
+    state.kanban_box.add_controller(col_drop);
 
     let s = state.clone();
     task_search.connect_changed(move |entry| {

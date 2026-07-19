@@ -384,6 +384,82 @@ impl Database {
         Ok(())
     }
 
+    /// Move a task to a column at a specific position, re-ordering siblings to fill the gap.
+    /// Handles both intra-column reorder and cross-column moves.
+    pub fn move_task(&self, task_id: i64, to_column_id: i64, to_position: i32) -> Result<(), rusqlite::Error> {
+        let from_column_id: i64 = self.conn.query_row(
+            "SELECT column_id FROM tasks WHERE id = ?1",
+            params![task_id],
+            |row| row.get(0),
+        )?;
+
+        // Compact source column when moving cross-column
+        if from_column_id != to_column_id {
+            let from_pos: i32 = self.conn.query_row(
+                "SELECT position FROM tasks WHERE id = ?1",
+                params![task_id],
+                |row| row.get(0),
+            ).unwrap_or(0);
+            self.conn.execute(
+                "UPDATE tasks SET position = position - 1 WHERE column_id = ?1 AND position > ?2",
+                params![from_column_id, from_pos],
+            )?;
+        }
+
+        // Get ordered tasks in target column (excluding current if already there)
+        let mut stmt = self.conn.prepare(
+            "SELECT id FROM tasks WHERE column_id = ?1 AND id != ?2 ORDER BY position, created_at"
+        )?;
+        let mut ordered: Vec<i64> = stmt.query_map(params![to_column_id, task_id], |row| row.get::<_, i64>(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        // Clamp and insert at target position
+        let pos = to_position.min(ordered.len() as i32);
+        ordered.insert(pos as usize, task_id);
+
+        // Re-assign positions sequentially
+        for (i, tid) in ordered.iter().enumerate() {
+            self.conn.execute(
+                "UPDATE tasks SET position = ?1, column_id = ?2 WHERE id = ?3",
+                params![i as i32, to_column_id, tid],
+            )?;
+        }
+
+        Ok(())
+    }
+
+    pub fn reorder_column(&self, column_id: i64, new_position: i32) -> Result<(), rusqlite::Error> {
+        let (project_id, old_pos): (i64, i32) = self.conn.query_row(
+            "SELECT project_id, position FROM columns WHERE id = ?1",
+            params![column_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+
+        if old_pos == new_position {
+            return Ok(());
+        }
+
+        if new_position > old_pos {
+            self.conn.execute(
+                "UPDATE columns SET position = position - 1 WHERE project_id = ?1 AND position > ?2 AND position <= ?3",
+                params![project_id, old_pos, new_position],
+            )?;
+        } else {
+            self.conn.execute(
+                "UPDATE columns SET position = position + 1 WHERE project_id = ?1 AND position >= ?2 AND position < ?3",
+                params![project_id, new_position, old_pos],
+            )?;
+        }
+
+        self.conn.execute(
+            "UPDATE columns SET position = ?1 WHERE id = ?2",
+            params![new_position, column_id],
+        )?;
+
+        Ok(())
+    }
+
     pub fn update_task(
         &self,
         task_id: i64,

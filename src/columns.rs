@@ -62,6 +62,16 @@ pub fn create_column_widgets(
     header_box.append(&header);
     header_box.append(&delete_btn);
 
+    // Drag source for column reordering
+    let col_drag = gtk::DragSource::new();
+    col_drag.set_actions(gdk::DragAction::MOVE);
+    let col_id_str = format!("col:{}", column_id);
+    col_drag.connect_prepare(move |_src, _x, _y| {
+        let v = col_id_str.to_value();
+        Some(gdk::ContentProvider::for_value(&v))
+    });
+    header_box.add_controller(col_drag);
+
     let count = gtk::Label::new(Some("0"));
     count.add_css_class("column-count");
     count.set_xalign(0.0);
@@ -70,15 +80,43 @@ pub fn create_column_widgets(
     list.set_hexpand(true);
     list.set_vexpand(true);
 
+    let scroll = gtk::ScrolledWindow::new();
+    scroll.set_hexpand(true);
+    scroll.set_vexpand(true);
+    scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+
     let drop_target = gtk::DropTarget::new(glib::Type::STRING, gdk::DragAction::MOVE);
     let s = state.clone();
     let col_id = column_id;
-    drop_target.connect_drop(move |_target, value, _x, _y| {
+    let list_ref = list.clone();
+    let scroll_ref = scroll.clone();
+    drop_target.connect_drop(move |_target, value, _x, y| {
         let s = s.clone();
+        let list = list_ref.clone();
+        let scroll = scroll_ref.clone();
         if let Ok(task_id_str) = value.get::<String>() {
             if let Ok(task_id) = task_id_str.parse::<i64>() {
+                let pos = {
+                    let vadj = scroll.vadjustment();
+                    let scroll_off = vadj.value();
+                    let effective_y = y + scroll_off;
+
+                    let mut pos = 0i32;
+                    let mut child = list.first_child();
+                    while let Some(widget) = child {
+                        if let Some(row) = widget.downcast_ref::<gtk::ListBoxRow>() {
+                            let alloc = row.allocation();
+                            if effective_y < alloc.y() as f64 + alloc.height() as f64 / 2.0 {
+                                break;
+                            }
+                        }
+                        pos += 1;
+                        child = widget.next_sibling();
+                    }
+                    pos
+                };
                 let db = s.db.borrow();
-                let _ = db.update_task_column(task_id, col_id);
+                let _ = db.move_task(task_id, col_id, pos);
                 drop(db);
                 refresh_tasks(&s);
             }
@@ -86,11 +124,6 @@ pub fn create_column_widgets(
         true
     });
     list.add_controller(drop_target);
-
-    let scroll = gtk::ScrolledWindow::new();
-    scroll.set_hexpand(true);
-    scroll.set_vexpand(true);
-    scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
     scroll.set_child(Some(&list));
 
     let add_btn = gtk::Button::with_label("+ Add Task");

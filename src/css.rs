@@ -539,4 +539,20 @@ pub const APP_CSS: &str = r#"
         color: #EDEDED;
         background-color: rgba(255, 159, 10, 0.2);
     }
+    .sync-btn {
+        background: none;
+        color: #8E8E93;
+        font-size: 16px;
+        font-weight: 600;
+        min-width: 22px;
+        min-height: 22px;
+        padding: 0;
+        margin: 0 2px;
+        border: none;
+        border-radius: 6px;
+    }
+    .sync-btn:hover {
+        color: #FF9F0A;
+        background-color: rgba(255, 159, 10, 0.15);
+    }
 "#;
