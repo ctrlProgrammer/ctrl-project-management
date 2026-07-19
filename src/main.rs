@@ -7,6 +7,8 @@ mod tasks;
 mod dialogs;
 mod ui;
 mod mcp;
+mod session;
+mod export;
 
 use gtk4::prelude::*;
 use gtk4::{self as gtk};

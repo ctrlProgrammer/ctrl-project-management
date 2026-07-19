@@ -80,7 +80,7 @@ fn handle_request(db: &Database, req: &JsonRpcRequest) -> Option<serde_json::Val
         "initialize" => {
             make_result(req.id.clone(), serde_json::json!({
                 "protocolVersion": "2024-11-05",
-                "serverInfo": { "name": "ctrl-project-management", "version": "0.1.0" },
+                "serverInfo": { "name": "ctrl-project-management", "version": env!("CARGO_PKG_VERSION") },
                 "capabilities": { "tools": {} }
             }))
         }
@@ -191,6 +191,51 @@ fn handle_request(db: &Database, req: &JsonRpcRequest) -> Option<serde_json::Val
                             },
                             "required": ["project_id", "name"]
                         }
+                    },
+                    {
+                        "name": "delete_task",
+                        "description": "Delete a task by its ID",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "task_id": { "type": "integer", "description": "ID of the task to delete" }
+                            },
+                            "required": ["task_id"]
+                        }
+                    },
+                    {
+                        "name": "delete_column",
+                        "description": "Delete a column and all its tasks",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "column_id": { "type": "integer", "description": "ID of the column to delete" }
+                            },
+                            "required": ["column_id"]
+                        }
+                    },
+                    {
+                        "name": "delete_project",
+                        "description": "Delete a project and all its columns and tasks",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "project_id": { "type": "integer", "description": "ID of the project to delete" }
+                            },
+                            "required": ["project_id"]
+                        }
+                    },
+                    {
+                        "name": "export_project",
+                        "description": "Export project data as JSON or Markdown",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "project_id": { "type": "integer", "description": "ID of the project to export" },
+                                "format": { "type": "string", "enum": ["json", "markdown"], "description": "Export format: 'json' or 'markdown'" }
+                            },
+                            "required": ["project_id", "format"]
+                        }
                     }
                 ]
             }))
@@ -212,6 +257,10 @@ fn handle_request(db: &Database, req: &JsonRpcRequest) -> Option<serde_json::Val
                 "update_task" => handle_update_task(db, req.id.clone(), arguments),
                 "create_project" => handle_create_project(db, req.id.clone(), arguments),
                 "create_column" => handle_create_column(db, req.id.clone(), arguments),
+                "delete_task" => handle_delete_task(db, req.id.clone(), arguments),
+                "delete_column" => handle_delete_column(db, req.id.clone(), arguments),
+                "delete_project" => handle_delete_project(db, req.id.clone(), arguments),
+                "export_project" => handle_export_project(db, req.id.clone(), arguments),
                 _ => make_error(req.id.clone(), -32601, "Method not found", &format!("Unknown tool: {}", name)),
             }
         }
@@ -443,5 +492,64 @@ fn handle_create_column(db: &Database, id: Option<serde_json::Value>, args: Opti
             make_result(id, serde_json::json!({ "content": [{ "type": "text", "text": serde_json::to_string(&serde_json::json!({ "id": column_id, "project_id": project_id, "name": name })).unwrap() }] }))
         }
         Err(e) => make_error(id, -32603, "Database error", &e.to_string()),
+    }
+}
+
+fn handle_delete_task(db: &Database, id: Option<serde_json::Value>, args: Option<&serde_json::Value>) -> serde_json::Value {
+    let task_id = match args.and_then(|a| a.get("task_id")).and_then(|v| v.as_i64()) {
+        Some(v) => v,
+        None => return make_error(id, -32602, "Invalid params", "Missing required parameter: task_id"),
+    };
+    match db.delete_task(task_id) {
+        Ok(()) => make_result(id, serde_json::json!({ "content": [{ "type": "text", "text": format!("Task {} deleted", task_id) }] })),
+        Err(e) => make_error(id, -32603, "Database error", &e.to_string()),
+    }
+}
+
+fn handle_delete_column(db: &Database, id: Option<serde_json::Value>, args: Option<&serde_json::Value>) -> serde_json::Value {
+    let column_id = match args.and_then(|a| a.get("column_id")).and_then(|v| v.as_i64()) {
+        Some(v) => v,
+        None => return make_error(id, -32602, "Invalid params", "Missing required parameter: column_id"),
+    };
+    match db.delete_column(column_id) {
+        Ok(()) => make_result(id, serde_json::json!({ "content": [{ "type": "text", "text": format!("Column {} deleted", column_id) }] })),
+        Err(e) => make_error(id, -32603, "Database error", &e.to_string()),
+    }
+}
+
+fn handle_delete_project(db: &Database, id: Option<serde_json::Value>, args: Option<&serde_json::Value>) -> serde_json::Value {
+    let project_id = match args.and_then(|a| a.get("project_id")).and_then(|v| v.as_i64()) {
+        Some(v) => v,
+        None => return make_error(id, -32602, "Invalid params", "Missing required parameter: project_id"),
+    };
+    match db.delete_project(project_id) {
+        Ok(()) => make_result(id, serde_json::json!({ "content": [{ "type": "text", "text": format!("Project {} deleted", project_id) }] })),
+        Err(e) => make_error(id, -32603, "Database error", &e.to_string()),
+    }
+}
+
+fn handle_export_project(db: &Database, id: Option<serde_json::Value>, args: Option<&serde_json::Value>) -> serde_json::Value {
+    let args = match args {
+        Some(a) => a,
+        None => return make_error(id, -32602, "Invalid params", "Missing arguments"),
+    };
+    let project_id = match args.get("project_id").and_then(|v| v.as_i64()) {
+        Some(v) => v,
+        None => return make_error(id, -32602, "Invalid params", "Missing required parameter: project_id"),
+    };
+    let format = match args.get("format").and_then(|v| v.as_str()) {
+        Some(v) => v,
+        None => return make_error(id, -32602, "Invalid params", "Missing required parameter: format"),
+    };
+
+    let result = match format {
+        "json" => crate::export::export_project_json(db, project_id),
+        "markdown" => crate::export::export_project_markdown(db, project_id),
+        other => return make_error(id, -32602, "Invalid params", &format!("Unknown format: {}. Use 'json' or 'markdown'.", other)),
+    };
+
+    match result {
+        Ok(text) => make_result(id, serde_json::json!({ "content": [{ "type": "text", "text": text }] })),
+        Err(e) => make_error(id, -32603, "Export error", &e),
     }
 }

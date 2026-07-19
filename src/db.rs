@@ -505,3 +505,193 @@ impl Database {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_db() -> (Database, tempfile::TempDir) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db_path = dir.path().join("test.db");
+        let db = Database::open(&db_path).expect("open db");
+        db.create_project("Test Project", "A test project").expect("create project");
+        (db, dir)
+    }
+
+    fn first_project_id(db: &Database) -> i64 {
+        db.get_all_projects().unwrap()[0].0
+    }
+
+    fn first_column_id(db: &Database, pid: i64) -> i64 {
+        db.get_columns_for_project(pid).unwrap()[0].id
+    }
+
+    #[test]
+    fn test_create_and_get_projects() {
+        let (db, _dir) = create_test_db();
+        let projects = db.get_all_projects().unwrap();
+        assert_eq!(projects.len(), 1);
+        assert_eq!(projects[0].1, "Test Project");
+    }
+
+    #[test]
+    fn test_delete_project() {
+        let (db, _dir) = create_test_db();
+        let pid = first_project_id(&db);
+        db.delete_project(pid).unwrap();
+        assert_eq!(db.get_all_projects().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_create_project_with_default_columns() {
+        let (db, _dir) = create_test_db();
+        let pid = first_project_id(&db);
+        let columns = db.get_columns_for_project(pid).unwrap();
+        assert_eq!(columns.len(), 3);
+        assert_eq!(columns[0].name, "To Do");
+        assert_eq!(columns[1].name, "In Progress");
+        assert_eq!(columns[2].name, "Done");
+    }
+
+    #[test]
+    fn test_create_and_delete_column() {
+        let (db, _dir) = create_test_db();
+        let pid = first_project_id(&db);
+        let col_id = db.create_column(pid, "Review").unwrap();
+        assert_eq!(db.get_columns_for_project(pid).unwrap().len(), 4);
+        db.delete_column(col_id).unwrap();
+        assert_eq!(db.get_columns_for_project(pid).unwrap().len(), 3);
+    }
+
+    #[test]
+    fn test_create_get_update_delete_task() {
+        let (db, _dir) = create_test_db();
+        let pid = first_project_id(&db);
+        let col_id = first_column_id(&db, pid);
+
+        let task_id = db.create_task(pid, col_id, "Test Task", "Desc", "", "https://x.com", "a,b", "2026-12-31", 2).unwrap();
+        let task = db.get_task(task_id).unwrap();
+        assert_eq!(task.title, "Test Task");
+        assert_eq!(task.tags, "a,b");
+        assert_eq!(task.priority, 2);
+
+        db.update_task(task_id, "Updated", "New desc", "", "", "c", "2026-01-01", 3).unwrap();
+        let task = db.get_task(task_id).unwrap();
+        assert_eq!(task.title, "Updated");
+        assert_eq!(task.tags, "c");
+
+        assert_eq!(db.get_tasks_for_project(pid).unwrap().len(), 1);
+        db.delete_task(task_id).unwrap();
+        assert!(db.get_task(task_id).is_err());
+        assert_eq!(db.get_tasks_for_project(pid).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_get_tasks_for_project_and_month() {
+        let (db, _dir) = create_test_db();
+        let pid = first_project_id(&db);
+        let col_id = first_column_id(&db, pid);
+
+        let t1 = db.create_task(pid, col_id, "Task 1", "", "", "", "", "", 0).unwrap();
+        let _t2 = db.create_task(pid, col_id, "Task 2", "", "", "", "", "", 0).unwrap();
+
+        // Extract year/month from the created_at of the first task
+        let task = db.get_task(t1).unwrap();
+        let parts: Vec<&str> = task.created_at.split('-').collect();
+        let year: i32 = parts[0].parse().unwrap();
+        let month: i32 = parts[1].parse().unwrap();
+
+        let tasks = db.get_tasks_for_project_and_month(pid, year, month).unwrap();
+        assert_eq!(tasks.len(), 2);
+
+        // Wrong month returns empty
+        let empty = db.get_tasks_for_project_and_month(pid, 1999, 1).unwrap();
+        assert_eq!(empty.len(), 0);
+    }
+
+    #[test]
+    fn test_move_task_intra_column() {
+        let (db, _dir) = create_test_db();
+        let pid = first_project_id(&db);
+        let col_id = first_column_id(&db, pid);
+
+        let t1 = db.create_task(pid, col_id, "A", "", "", "", "", "", 0).unwrap();
+        let t2 = db.create_task(pid, col_id, "B", "", "", "", "", "", 0).unwrap();
+        let t3 = db.create_task(pid, col_id, "C", "", "", "", "", "", 0).unwrap();
+
+        // Move task C (id=t3) to position 0
+        db.move_task(t3, col_id, 0).unwrap();
+
+        let tasks = db.get_tasks_for_project(pid).unwrap();
+        let c_tasks: Vec<&Task> = tasks.iter().filter(|t| t.column_id == col_id).collect();
+        assert_eq!(c_tasks[0].id, t3);
+        assert_eq!(c_tasks[1].id, t1);
+        assert_eq!(c_tasks[2].id, t2);
+    }
+
+    #[test]
+    fn test_move_task_cross_column() {
+        let (db, _dir) = create_test_db();
+        let pid = first_project_id(&db);
+        let cols = db.get_columns_for_project(pid).unwrap();
+        let col_a = cols[0].id;
+        let col_b = cols[1].id;
+
+        let t1 = db.create_task(pid, col_a, "X", "", "", "", "", "", 0).unwrap();
+        let _t2 = db.create_task(pid, col_a, "Y", "", "", "", "", "", 0).unwrap();
+        let t3 = db.create_task(pid, col_b, "Z", "", "", "", "", "", 0).unwrap();
+
+        // Move t1 from col_a to col_b at position 0
+        db.move_task(t1, col_b, 0).unwrap();
+
+        let all = db.get_tasks_for_project(pid).unwrap();
+        let in_b: Vec<&Task> = all.iter().filter(|t| t.column_id == col_b).collect();
+        assert_eq!(in_b.len(), 2);
+        assert_eq!(in_b[0].id, t1);
+        assert_eq!(in_b[1].id, t3);
+    }
+
+    #[test]
+    fn test_reorder_column() {
+        let (db, _dir) = create_test_db();
+        let pid = first_project_id(&db);
+        let cols = db.get_columns_for_project(pid).unwrap();
+
+        // Default: To Do(0), In Progress(1), Done(2)
+        // Move Done (position 2) to position 0
+        let done_id = cols[2].id;
+        db.reorder_column(done_id, 0).unwrap();
+
+        let updated = db.get_columns_for_project(pid).unwrap();
+        assert_eq!(updated[0].id, done_id);
+        assert_eq!(updated[0].position, 0);
+    }
+
+    #[test]
+    fn test_reorder_column_noop() {
+        let (db, _dir) = create_test_db();
+        let pid = first_project_id(&db);
+        let cols = db.get_columns_for_project(pid).unwrap();
+
+        // Move to same position — should be a no-op
+        db.reorder_column(cols[0].id, 0).unwrap();
+        let updated = db.get_columns_for_project(pid).unwrap();
+        assert_eq!(updated.len(), 3);
+    }
+
+    #[test]
+    fn test_get_existing_tags() {
+        let (db, _dir) = create_test_db();
+        let pid = first_project_id(&db);
+        let col_id = first_column_id(&db, pid);
+
+        let tags_empty = db.get_existing_tags(pid).unwrap();
+        assert!(tags_empty.is_empty());
+
+        db.create_task(pid, col_id, "T1", "", "", "", "alpha,beta", "", 0).unwrap();
+        db.create_task(pid, col_id, "T2", "", "", "", "beta,gamma", "", 0).unwrap();
+
+        let tags = db.get_existing_tags(pid).unwrap();
+        assert_eq!(tags, vec!["alpha", "beta", "gamma"]);
+    }
+}

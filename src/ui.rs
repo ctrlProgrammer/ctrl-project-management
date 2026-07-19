@@ -1,8 +1,12 @@
 use crate::columns::rebuild_columns;
 use crate::css::APP_CSS;
-use crate::dialogs::{show_add_column_dialog, show_delete_project_dialog, show_new_project_dialog};
+use crate::dialogs::{
+    show_add_column_dialog, show_delete_project_dialog, show_new_project_dialog,
+    show_new_task_dialog,
+};
 use crate::models::AppState;
 use crate::projects::refresh_projects;
+use crate::session::{self, SessionState};
 use crate::tasks::refresh_tasks;
 use gtk4::gdk;
 use gtk4::gdk::prelude::ToplevelExt;
@@ -13,7 +17,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 pub fn build_ui(app: &gtk::Application) {
-    let database = crate::db::Database::open(crate::db::default_db_path()).expect("Failed to open database");
+    let database =
+        crate::db::Database::open(crate::db::default_db_path()).expect("Failed to open database");
 
     let window = gtk::ApplicationWindow::new(app);
     window.set_title(Some("Project Manager"));
@@ -93,6 +98,10 @@ pub fn build_ui(app: &gtk::Application) {
 
     let new_project_btn = gtk::Button::with_label("+ New Project");
 
+    let export_btn = gtk::Button::with_label("Export...");
+    export_btn.set_has_frame(false);
+    export_btn.add_css_class("export-btn");
+
     let delete_project_btn = gtk::Button::with_label("Delete Project");
     delete_project_btn.add_css_class("column-delete");
     delete_project_btn.add_css_class("delete-project-btn");
@@ -134,6 +143,7 @@ pub fn build_ui(app: &gtk::Application) {
     header.append(&sync_btn);
     header.append(&filter_box);
     header.append(&delete_project_btn);
+    header.append(&export_btn);
     header.append(&new_project_btn);
 
     widget_box.append(&header);
@@ -159,7 +169,14 @@ pub fn build_ui(app: &gtk::Application) {
     pf_popover.set_has_arrow(false);
     pf_popover.add_css_class("priority-popover");
     let pf_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    let pf_items = [(-1, "All"), (0, "Normal"), (1, "Low"), (2, "Medium"), (3, "High"), (4, "Critical")];
+    let pf_items = [
+        (-1, "All"),
+        (0, "Normal"),
+        (1, "Low"),
+        (2, "Medium"),
+        (3, "High"),
+        (4, "Critical"),
+    ];
     for &(_val, name) in &pf_items {
         let opt = gtk::Button::new();
         opt.add_css_class("priority-option");
@@ -188,7 +205,6 @@ pub fn build_ui(app: &gtk::Application) {
     widget_box.append(&kanban_scroll);
 
     let add_column_btn = gtk::Button::with_label("+ Add Column");
-    add_column_btn.add_css_class("add-column-outer");
 
     let now = glib::DateTime::now_local().unwrap();
     let current_year = now.year();
@@ -277,12 +293,110 @@ pub fn build_ui(app: &gtk::Application) {
             }
             rebuild_columns(&s);
             refresh_tasks(&s);
+            save_session_state(&s);
         }
     });
 
     let s = state.clone();
     new_project_btn.connect_clicked(move |_| {
         show_new_project_dialog(&s);
+    });
+
+    let s = state.clone();
+    let window_for_export = state.window.clone();
+    export_btn.connect_clicked(move |_| {
+        let project_id = match *s.current_project_id.borrow() {
+            Some(pid) => pid,
+            None => {
+                eprintln!("Export: No project selected");
+                return;
+            }
+        };
+
+        // Create file filters
+        let json_filter = gtk::FileFilter::new();
+        json_filter.set_name(Some("JSON files (*.json)"));
+        json_filter.add_pattern("*.json");
+
+        let md_filter = gtk::FileFilter::new();
+        md_filter.set_name(Some("Markdown files (*.md)"));
+        md_filter.add_pattern("*.md");
+
+        let any_filter = gtk::FileFilter::new();
+        any_filter.set_name(Some("All supported files"));
+        any_filter.add_pattern("*.json");
+        any_filter.add_pattern("*.md");
+
+        let dialog = gtk::FileChooserNative::new(
+            Some("Export Project"),
+            Some(&window_for_export),
+            gtk::FileChooserAction::Save,
+            Some("Export"),
+            Some("Cancel"),
+        );
+        dialog.add_filter(&json_filter);
+        dialog.add_filter(&md_filter);
+        dialog.add_filter(&any_filter);
+
+        // Set a default file name based on the project
+        let projects = s.projects.borrow();
+        if let Some(proj) = projects.iter().find(|p| p.id == project_id) {
+            let safe_name = proj.name.replace(' ', "_").replace('/', "_");
+            dialog.set_current_name(&format!("{}.json", safe_name));
+        }
+        drop(projects);
+
+        let s2 = s.clone();
+        dialog.connect_response(move |dialog, response| {
+            if response != gtk::ResponseType::Accept {
+                return;
+            }
+
+            let path = match dialog.file() {
+                Some(file) => file.path().map(|p| p.to_path_buf()),
+                None => None,
+            };
+
+            let path = match path {
+                Some(p) => p,
+                None => {
+                    eprintln!("Export: No path selected");
+                    return;
+                }
+            };
+
+            // Determine format from file extension
+            let format = match path.extension().and_then(|e| e.to_str()) {
+                Some("md") | Some("markdown") => "markdown",
+                _ => "json",
+            };
+
+            let db = s2.db.borrow();
+            let result = match format {
+                "json" => crate::export::export_project_json(&db, project_id),
+                _ => crate::export::export_project_markdown(&db, project_id),
+            };
+            drop(db);
+
+            match result {
+                Ok(content) => match std::fs::write(&path, &content) {
+                    Ok(()) => {
+                        let name = path.file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("file");
+                        eprintln!("Export: Project exported to {}", name);
+                    }
+                    Err(e) => {
+                        eprintln!("Export: Failed to write file: {}", e);
+                    }
+                },
+                Err(e) => {
+                    eprintln!("Export: Failed to export project: {}", e);
+                }
+            }
+        });
+
+        dialog.show();
     });
 
     let s = state.clone();
@@ -313,6 +427,7 @@ pub fn build_ui(app: &gtk::Application) {
         }
         s.filter_label.set_text(&month_name(new_month, new_year));
         refresh_tasks(&s);
+        save_session_state(&s);
     });
 
     let s = state.clone();
@@ -333,6 +448,7 @@ pub fn build_ui(app: &gtk::Application) {
         }
         s.filter_label.set_text(&month_name(new_month, new_year));
         refresh_tasks(&s);
+        save_session_state(&s);
     });
 
     let s = state.clone();
@@ -348,6 +464,7 @@ pub fn build_ui(app: &gtk::Application) {
         }
         s.filter_label.set_text(&month_name(new_month, new_year));
         refresh_tasks(&s);
+        save_session_state(&s);
     });
 
     let s = state.clone();
@@ -400,7 +517,68 @@ pub fn build_ui(app: &gtk::Application) {
     });
 
     refresh_projects(&state);
+
+    // Keyboard shortcuts
+    let key_ctrl = gtk::EventControllerKey::new();
+    let s = state.clone();
+    let s2 = state.clone();
+    let s3 = state.clone();
+    key_ctrl.connect_key_pressed(move |_ctrl, keyval, _code, state_mod| {
+        let ctrl = state_mod.contains(gdk::ModifierType::CONTROL_MASK);
+        if ctrl && keyval == gdk::Key::n {
+            let use_shift = state_mod.contains(gdk::ModifierType::SHIFT_MASK);
+            if use_shift {
+                show_new_project_dialog(&s);
+            } else {
+                let col_id = s
+                    .column_widgets
+                    .borrow()
+                    .first()
+                    .map(|cw| cw.id)
+                    .unwrap_or(0);
+                show_new_task_dialog(&s, col_id);
+            }
+            return glib::Propagation::Stop;
+        }
+        if ctrl && keyval == gdk::Key::f {
+            s2.task_search.grab_focus();
+            return glib::Propagation::Stop;
+        }
+        if ctrl && keyval == gdk::Key::r {
+            refresh_tasks(&s3);
+            return glib::Propagation::Stop;
+        }
+        glib::Propagation::Proceed
+    });
+    window.add_controller(key_ctrl);
+
+    // Restore session — auto-select last project and filter month
+    let session_data = session::load_session();
+    if let Some(pid) = session_data.last_project_id {
+        let projects = state.projects.borrow();
+        if let Some(pos) = projects.iter().position(|p| p.id == pid) {
+            drop(projects);
+            if let Some(row) = state.project_listbox.row_at_index(pos as i32) {
+                row.activate();
+            }
+        }
+    }
+    if let (Some(y), Some(m)) = (session_data.filter_year, session_data.filter_month) {
+        *state.filter_year.borrow_mut() = y;
+        *state.filter_month.borrow_mut() = m;
+        state.filter_label.set_text(&month_name(m, y));
+    }
+
     window.present();
+}
+
+fn save_session_state(state: &AppState) {
+    let ss = SessionState {
+        last_project_id: *state.current_project_id.borrow(),
+        filter_year: Some(*state.filter_year.borrow()),
+        filter_month: Some(*state.filter_month.borrow()),
+    };
+    session::save_session(&ss);
 }
 
 fn month_name(month: i32, year: i32) -> String {

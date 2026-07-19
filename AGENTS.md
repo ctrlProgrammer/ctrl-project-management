@@ -46,10 +46,11 @@ The project's `opencode.json` registers the MCP server at the release binary pat
 - `get_task` — get a single task by `task_id`
 - `create_task` — create a task (requires `project_id`, `column_id`, `title`)
 - `update_task` — update task fields (requires `task_id`)
+- `delete_task` — delete a task (requires `task_id`)
+- `delete_column` — delete a column and its tasks (requires `column_id`)
+- `delete_project` — delete a project and all its columns and tasks (requires `project_id`)
 - `create_project` — create a new project (requires `name`)
 - `create_column` — add a column to a project (requires `project_id`, `name`)
-
-No delete tools are exposed.
 
 ### Build release artifacts
 ```
