@@ -709,14 +709,25 @@ pub fn show_add_column_dialog(state: &Rc<AppState>) {
     dialog.set_modal(true);
     dialog.set_default_size(320, -1);
     dialog.set_titlebar(Some(&gtk::Box::new(gtk::Orientation::Horizontal, 0)));
+    dialog.add_css_class("dialog-window");
 
     let content = dialog.content_area();
-    let card = gtk::Box::new(gtk::Orientation::Vertical, 10);
+    content.add_css_class("dialog-content");
 
-    card.append(&gtk::Label::new(Some("New Column")));
+    let card = gtk::Box::new(gtk::Orientation::Vertical, 12);
+    card.set_margin_top(6);
+    card.set_margin_bottom(20);
+    card.set_margin_start(20);
+    card.set_margin_end(20);
+
+    let title_label = gtk::Label::new(Some("New Column"));
+    title_label.add_css_class("dialog-title");
+    title_label.set_halign(gtk::Align::Start);
+    card.append(&title_label);
 
     let entry = gtk::Entry::new();
     entry.set_placeholder_text(Some("e.g. Backlog, Review, Deployed"));
+    entry.add_css_class("dialog-entry");
     card.append(&entry);
 
     let (cancel_btn, add_btn, buttons) = make_buttons("Cancel", "Add Column");
@@ -761,11 +772,21 @@ pub fn show_delete_column_dialog(state: &Rc<AppState>, column_id: i64, column_na
     dialog.set_modal(true);
     dialog.set_default_size(320, -1);
     dialog.set_titlebar(Some(&gtk::Box::new(gtk::Orientation::Horizontal, 0)));
+    dialog.add_css_class("dialog-window");
 
     let content = dialog.content_area();
-    let card = gtk::Box::new(gtk::Orientation::Vertical, 10);
+    content.add_css_class("dialog-content");
 
-    card.append(&gtk::Label::new(Some("Delete Column")));
+    let card = gtk::Box::new(gtk::Orientation::Vertical, 12);
+    card.set_margin_top(6);
+    card.set_margin_bottom(20);
+    card.set_margin_start(20);
+    card.set_margin_end(20);
+
+    let title_label = gtk::Label::new(Some("Delete Column"));
+    title_label.add_css_class("dialog-title");
+    title_label.set_halign(gtk::Align::Start);
+    card.append(&title_label);
 
     let column_name = column_name.to_string();
     let label = gtk::Label::new(Some(&format!(
